@@ -1,0 +1,65 @@
+name: Test & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Lint & validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installer les outils
+        run: pip install ruff
+
+      - name: Lint Python
+        run: ruff check . --select E9,F63,F7,F82
+
+      - name: Compilation Python
+        run: python -m compileall -q models/ __init__.py
+
+      - name: Validation XML
+        run: |
+          python - << 'EOF'
+          import sys, glob
+          from xml.etree import ElementTree
+          erreurs = 0
+          for f in glob.glob('**/*.xml', recursive=True):
+              try:
+                  ElementTree.parse(f)
+                  print(f"OK   {f}")
+              except ElementTree.ParseError as e:
+                  print(f"FAIL {f}: {e}")
+                  erreurs += 1
+          sys.exit(1 if erreurs else 0)
+          EOF
+
+  deploy:
+    name: Déploiement VPS
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déployer et mettre à jour
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            MODULE_DIR=/odoo19/mes-modules-pro/stock_landed_cost_summary_intc
+            if [ -d "$MODULE_DIR/.git" ]; then
+              cd "$MODULE_DIR"
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              git clone git@github.com:Gitjaphet/stock_landed_cost_summary_intc.git "$MODULE_DIR"
+            fi
+            sudo systemctl restart odoo
