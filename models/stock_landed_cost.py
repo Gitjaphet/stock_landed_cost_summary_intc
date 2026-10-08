@@ -59,9 +59,9 @@ class StockLandedCost(models.Model):
             html += ''.join(f'<{tag} class="text-end">{escape(c)}</{tag}>' for c in cells[1:])
             return f'<tr>{html}</tr>'
 
-        header = ['Produit', 'Qté', 'Achat / pièce']
+        header = ['Produit', 'Qté', 'Achat / pièce', 'Coût de revient / pièce']
         header += [f'{fee.name} / pièce' for fee in fee_types]
-        header += ['Coût de revient / pièce', 'Total']
+        header += ['Total']
 
         body = []
         total = {'qty': 0.0, 'original': 0.0, 'fees': dict.fromkeys(fee_types, 0.0)}
@@ -74,9 +74,9 @@ class StockLandedCost(models.Model):
                 return amount / qty if qty else 0.0
 
             body.append(row(
-                [product.display_name, f"{qty:g}", money(per_piece(data['original']))]
+                [product.display_name, f"{qty:g}", money(per_piece(data['original'])), money(per_piece(line_total))]
                 + [money(per_piece(amount)) for amount in fees]
-                + [money(per_piece(line_total)), money(line_total)]
+                + [money(line_total)]
             ))
             total['qty'] += qty
             total['original'] += data['original']
@@ -86,9 +86,9 @@ class StockLandedCost(models.Model):
         grand_total = total['original'] + sum(total['fees'].values())
         head_html = row(header, tag='th')
         foot_html = row(
-            ['Total du lot', f"{total['qty']:g}", money(total['original'])]
+            ['Total du lot', f"{total['qty']:g}", money(total['original']), '']
             + [money(total['fees'][fee]) for fee in fee_types]
-            + ['', money(grand_total)],
+            + [money(grand_total)],
             tag='th',
         )
         return Markup(
